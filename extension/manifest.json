@@ -3,21 +3,43 @@
   "name": "CodeTracker for LeetCode",
   "version": "1.3.1",
   "description": "Auto-saves your accepted LeetCode solutions to CodeTracker and GitHub.",
-  "permissions": ["storage", "activeTab"],
-  "host_permissions": ["https://*.lovable.app/*"],
-  "action": { "default_popup": "popup.html", "default_icon": "icon.png" },
-  "icons": { "48": "icon.png", "128": "icon.png" },
-  "background": { "service_worker": "background.js" },
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://*.vercel.app/*",
+    "http://localhost:*/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "icons": {
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
-      "matches": ["https://leetcode.com/*"],
-      "js": ["inject.js"],
+      "matches": [
+        "https://leetcode.com/*"
+      ],
+      "js": [
+        "inject.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN"
     },
     {
-      "matches": ["https://leetcode.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://leetcode.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]
