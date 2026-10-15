@@ -17,10 +17,12 @@ dist-ssr
 .vercel
 *.local
 
-# Environment
+# Environment & Secrets
 .env
 .env.*
 !.env.example
+client_secret*.json
+*.googleusercontent.com.json
 
 # Wrangler / Cloudflare
 .wrangler/
