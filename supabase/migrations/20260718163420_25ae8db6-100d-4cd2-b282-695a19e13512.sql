@@ -1,0 +1,1 @@
+ALTER TABLE public.problems RENAME COLUMN review_count TO times_solved;

@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body {
+        width: 300px;
+        margin: 0;
+        padding: 14px;
+        background: #0f1422;
+        color: #e6e8f0;
+        font:
+          13px/1.45 system-ui,
+          sans-serif;
+      }
+      h1 {
+        font-size: 15px;
+        margin: 0 0 10px;
+        color: #c084fc;
+      }
+      label {
+        display: block;
+        margin: 10px 0 4px;
+        color: #a5abc4;
+        font-size: 12px;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        background: #0a0e19;
+        border: 1px solid #2a3150;
+        color: #e6e8f0;
+        border-radius: 8px;
+        padding: 7px 9px;
+        font: inherit;
+      }
+      button {
+        margin-top: 10px;
+        border: 0;
+        border-radius: 8px;
+        padding: 8px 12px;
+        font: 600 13px system-ui;
+        cursor: pointer;
+        background: #a855f7;
+        color: #fff;
+        width: 100%;
+      }
+      button.sec {
+        background: #1b2238;
+        color: #e6e8f0;
+      }
+      .muted {
+        color: #8a91aa;
+        font-size: 12px;
+      }
+      #st {
+        margin-top: 8px;
+        font-size: 12px;
+      }
+      .ok {
+        color: #34d399;
+      }
+      .err {
+        color: #f87171;
+      }
+      .warn {
+        color: #fbbf24;
+      }
+      .box {
+        background: #0a0e19;
+        border: 1px solid #2a3150;
+        border-radius: 10px;
+        padding: 10px;
+        margin-top: 10px;
+      }
+      .big {
+        font-size: 22px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .k {
+        color: #8a91aa;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      a.link {
+        color: #c084fc;
+        font-size: 12px;
+        cursor: pointer;
+        display: inline-block;
+        margin-top: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>CodeTracker</h1>
+    <div id="setup" style="display: none">
+      <label>Extension key</label><input id="token" placeholder="ct_…" autocomplete="off" />
+      <label>CodeTracker address</label><input id="base" />
+      <button id="save">Save &amp; test connection</button>
+    </div>
+    <div id="st"></div>
+    <div id="live" style="display: none">
+      <div class="box">
+        <div class="k">Problem</div>
+        <div id="prob">Open a LeetCode problem to start.</div>
+      </div>
+      <div class="box">
+        <div class="k">Time on this problem</div>
+        <div class="big" id="time">0:00</div>
+      </div>
+      <div class="box">
+        <div class="k">Last submission</div>
+        <div id="res" class="muted">No submission yet</div>
+      </div>
+      <button id="manual" style="display: none">Save my last Accepted solution</button>
+      <div class="muted" id="manualHint" style="display: none; margin-top: 4px">
+        Use this if the save box didn't pop up after Accepted.
+      </div>
+      <button id="reset" class="sec" style="display: none">Reset timer</button>
+      <a class="link" id="change">Change key / test connection</a>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
