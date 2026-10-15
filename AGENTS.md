@@ -1,15 +1,4 @@
-<!-- LOVABLE:BEGIN -->
-
-> [!IMPORTANT]
-> This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
-> published git history — force pushing, or rebasing/amending/squashing commits
-> that are already pushed — as it rewrites history on Lovable's side and the
-> user will likely lose their project history.
->
-> Commits you push to the connected branch sync back to Lovable and show up in
-> the editor, so keep the branch in a working state.
-
-<!-- LOVABLE:END -->
+# CodeTracker Guidelines
 
 - Chrome extension source lives in `extension/` and is zipped to `public/codetracker-extension.zip` (re-zip after edits); it talks only to `/api/public/extension/save` with a hashed per-user `ct_` token — why: keeps the extension isolated so its failures can't affect app pages.
-- GitHub uses the App User Connector (encrypted keys in `app_user_connections`, server-only); GitHub push failures never roll back the problem save — why: saving progress matters more than the backup.
+- GitHub integration uses encrypted access tokens in `app_user_connections` (server-only); GitHub push failures never roll back the problem save — why: saving progress matters more than the backup.

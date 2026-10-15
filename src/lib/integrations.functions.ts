@@ -32,30 +32,14 @@ export const getIntegrationStatus = createServerFn({ method: "GET" })
 export const startGithubConnect = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const clientKey = process.env["GITHUB_APP_USER_CONNECTOR_CLIENT_API_KEY"];
-    if (!clientKey) throw new Error("GitHub connection is not configured yet.");
-    const { authorizeAppUserOAuth } = await import("@/integrations/lovable/appUserConnector");
-    const { getConnectionKeyForUser } = await import("@/server/appUserConnections.server");
-    const { GATEWAY_BASE_URL, GITHUB_SCOPES } = await import("@/server/github.server");
+    const clientId = process.env["GITHUB_CLIENT_ID"];
+    if (!clientId) throw new Error("GitHub connection is not configured yet. Set GITHUB_CLIENT_ID.");
+    const { GITHUB_SCOPES } = await import("@/server/github.server");
     const request = getRequest();
     if (!request) throw new Error("OAuth must start from an app request.");
     const url = new URL(request.url);
-    const sandboxHost =
-      url.hostname === "localhost" ? request.headers.get("x-forwarded-host") : null;
-    const returnUrl = new URL(
-      "/api/oauth/github/return",
-      sandboxHost ? `https://${sandboxHost}` : url.origin,
-    ).toString();
-    const existing = await getConnectionKeyForUser(context.userId, "github");
-    const { authorizationUrl } = await authorizeAppUserOAuth({
-      gatewayBaseUrl: GATEWAY_BASE_URL,
-      connectorId: "github",
-      appUserId: context.userId,
-      clientAPIKey: clientKey,
-      returnUrl,
-      connectionAPIKey: existing ?? undefined,
-      credentialsConfiguration: { scopes: GITHUB_SCOPES },
-    });
+    const returnUrl = new URL("/api/oauth/github/return", url.origin).toString();
+    const authorizationUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(returnUrl)}&scope=${encodeURIComponent(GITHUB_SCOPES.join(" "))}&state=${context.userId}`;
     return { authorizationUrl };
   });
 
@@ -66,15 +50,30 @@ export const completeGithubConnect = createServerFn({ method: "POST" })
     return input;
   })
   .handler(async ({ data, context }) => {
-    const { exchangeAppUserOAuthCode } = await import("@/integrations/lovable/appUserConnector");
+    const clientId = process.env["GITHUB_CLIENT_ID"];
+    const clientSecret = process.env["GITHUB_CLIENT_SECRET"];
+    if (!clientId || !clientSecret) throw new Error("GitHub OAuth credentials not set.");
     const { saveConnectionKeyForUser } = await import("@/server/appUserConnections.server");
-    const { GATEWAY_BASE_URL, getGithubLogin } = await import("@/server/github.server");
-    const { connectionAPIKey, connectorId } = await exchangeAppUserOAuthCode(
-      GATEWAY_BASE_URL,
-      data.code,
-    );
-    if (connectorId !== "github") throw new Error("OAuth completion returned the wrong connector");
-    await saveConnectionKeyForUser(context.userId, connectorId, connectionAPIKey);
+    const { getGithubLogin } = await import("@/server/github.server");
+
+    const res = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: data.code,
+      }),
+    });
+    const tokenData = (await res.json()) as { access_token?: string; error?: string };
+    if (!tokenData.access_token) {
+      throw new Error(tokenData.error || "Failed to exchange GitHub authorization code");
+    }
+
+    await saveConnectionKeyForUser(context.userId, "github", tokenData.access_token);
     let login: string | null = null;
     try {
       login = await getGithubLogin(context.userId);
@@ -128,22 +127,7 @@ export const saveGithubRepo = createServerFn({ method: "POST" })
 export const disconnectGithub = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { disconnectAppUser } = await import("@/integrations/lovable/appUserConnector");
-    const { getConnectionKeyForUser, deleteConnectionKeyForUser } =
-      await import("@/server/appUserConnections.server");
-    const { GATEWAY_BASE_URL } = await import("@/server/github.server");
-    const key = await getConnectionKeyForUser(context.userId, "github");
-    if (key) {
-      try {
-        await disconnectAppUser({
-          gatewayBaseUrl: GATEWAY_BASE_URL,
-          connectionAPIKey: key,
-          connectorId: "github",
-        });
-      } catch (e) {
-        console.error(e);
-      }
-    }
+    const { deleteConnectionKeyForUser } = await import("@/server/appUserConnections.server");
     await deleteConnectionKeyForUser(context.userId, "github");
     return { ok: true };
   });

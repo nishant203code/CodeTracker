@@ -1,4 +1,4 @@
-const DEFAULT_BASE = "https://code-recall-quest.lovable.app";
+const DEFAULT_BASE = "http://localhost:3000";
 const $ = (id) => document.getElementById(id);
 const show = (live) => {
   $("setup").style.display = live ? "none" : "block";

@@ -1,4 +1,4 @@
-const DEFAULT_BASE = "https://code-recall-quest.lovable.app";
+const DEFAULT_BASE = "http://localhost:3000";
 
 async function cfg() {
   const { apiBase, token } = await chrome.storage.local.get(["apiBase", "token"]);

@@ -1,5 +1,5 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "codetracker",
   "private": true,
   "sideEffects": false,
   "type": "module",
@@ -12,7 +12,6 @@
     "format": "prettier --write ."
   },
   "dependencies": {
-    "@lovable.dev/cloud-auth-js": "^1.1.2",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-popover": "^1.1.15",
     "@radix-ui/react-progress": "^1.1.8",
@@ -43,7 +42,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
-    "@lovable.dev/vite-tanstack-config": "2.26.5",
     "@rolldown/binding-win32-x64-msvc": "^1.2.0",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",

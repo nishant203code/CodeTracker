@@ -1,8 +1,6 @@
 // Server-only GitHub helpers (called from server fns / server routes).
-import { appUserReconnectRequired, callAsAppUser } from "@/integrations/lovable/appUserConnector";
 import { getConnectionKeyForUser } from "@/server/appUserConnections.server";
 
-export const GATEWAY_BASE_URL = "https://connector-gateway.lovable.dev";
 export const GITHUB_SCOPES = ["read:user", "repo"];
 
 export class GithubError extends Error {
@@ -15,25 +13,23 @@ export class GithubError extends Error {
 }
 
 export async function gh(userId: string, path: string, init?: RequestInit) {
-  const key = await getConnectionKeyForUser(userId, "github");
-  if (!key) throw new GithubError("GitHub is not connected");
-  const res = await callAsAppUser({
-    gatewayBaseUrl: GATEWAY_BASE_URL,
-    connectionAPIKey: key,
-    connectorId: "github",
-    path,
-    requiredScopes: GITHUB_SCOPES,
-    init: {
-      ...init,
-      headers: {
-        Accept: "application/vnd.github+json",
-        "Content-Type": "application/json",
-        ...(init?.headers ?? {}),
-      },
+  const token = await getConnectionKeyForUser(userId, "github");
+  if (!token) throw new GithubError("GitHub is not connected");
+  const url = path.startsWith("http")
+    ? path
+    : `https://api.github.com${path.startsWith("/") ? path : `/${path}`}`;
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "CodeTracker-App",
+      ...(init?.headers ?? {}),
     },
   });
-  if (await appUserReconnectRequired(res)) {
-    throw new GithubError("GitHub access needs to be renewed. Reconnect it in Settings.", true);
+  if (res.status === 401) {
+    throw new GithubError("GitHub access token expired or revoked. Reconnect it in Settings.", true);
   }
   return res;
 }

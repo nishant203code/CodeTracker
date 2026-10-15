@@ -1,8 +1,3 @@
--- ============================================================
--- CodeTracker — Database Verification Script
--- Run this in your new Supabase project's SQL Editor to verify schema
--- ============================================================
-
 -- 1. Check all tables exist
 SELECT table_name
 FROM information_schema.tables

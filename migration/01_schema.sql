@@ -1,8 +1,3 @@
--- ============================================================
--- CodeTracker — Complete Supabase Database Schema
--- Run this in your new Supabase project's SQL Editor
--- ============================================================
-
 -- 1. ENUMS
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'difficulty_level') THEN
