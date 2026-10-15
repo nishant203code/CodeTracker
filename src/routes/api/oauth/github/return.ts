@@ -5,21 +5,20 @@ export const Route = createFileRoute("/api/oauth/github/return")({
     handlers: {
       GET: async ({ request }) => {
         const url = new URL(request.url);
-        const connectorId = url.searchParams.get("connector_id") ?? "";
-        const code = url.searchParams.get("code") ?? "";
-        const success = url.searchParams.get("success") === "true";
-        const offline = url.searchParams.get("offline_access_allowed");
+        // GitHub redirects back with ?code=...&state=... on success,
+        // or ?error=...&error_description=...&state=... on failure.
+        const code = url.searchParams.get("code");
         const error = url.searchParams.get("error");
-        const result =
-          success && offline === "false"
-            ? { success: true, connectorId, code: null }
-            : success && code
-              ? { success: true, connectorId, code }
-              : {
-                  success: false,
-                  connectorId,
-                  error: error ?? (success ? "Missing code" : "OAuth failed"),
-                };
+        const errorDesc = url.searchParams.get("error_description");
+
+        const result = code
+          ? { success: true, connectorId: "github", code }
+          : {
+              success: false,
+              connectorId: "github",
+              error: errorDesc || error || "OAuth failed",
+            };
+
         const esc = (s: string) =>
           s
             .replace(/&/g, "&amp;")
@@ -27,15 +26,19 @@ export const Route = createFileRoute("/api/oauth/github/return")({
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;");
         const safeJson = JSON.stringify(result).replace(/<\//g, "<\\/");
+        const statusMsg = result.success
+          ? "Connection complete, closing…"
+          : "Failed: " + esc((result as { error?: string }).error ?? "Unknown error");
         const html = `<!DOCTYPE html><html><head><title>Finishing connection…</title></head><body>
-<p>${result.success ? "Connection complete, closing…" : "Failed: " + esc((result as { error?: string }).error ?? "Unknown error")}</p>
+<p>${statusMsg}</p>
 <script>
 const result = ${safeJson};
 const type = result.success ? "appUserConnectorOAuthComplete" : "appUserConnectorOAuthFailed";
 if (window.opener && window.opener !== window) {
   window.opener.postMessage({ type, connectorId: result.connectorId, code: result.code ?? null }, window.location.origin);
 }
-window.close();
+// Small delay so the parent window reliably processes the message before we close
+setTimeout(function() { window.close(); }, 300);
 </script></body></html>`;
         return new Response(html, { headers: { "Content-Type": "text/html" } });
       },

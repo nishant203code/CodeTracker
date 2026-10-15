@@ -36,6 +36,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
 
 function waitForOAuth(popup: Window) {
   return new Promise<string | null>((resolve, reject) => {
+    let received = false;
     const cleanup = () => {
       window.removeEventListener("message", onMsg);
       window.clearInterval(poll);
@@ -49,6 +50,7 @@ function waitForOAuth(popup: Window) {
         (t !== "appUserConnectorOAuthComplete" && t !== "appUserConnectorOAuthFailed")
       )
         return;
+      received = true;
       cleanup();
       if (t === "appUserConnectorOAuthComplete")
         resolve(typeof e.data.code === "string" ? e.data.code : null);
@@ -60,6 +62,8 @@ function waitForOAuth(popup: Window) {
     window.addEventListener("message", onMsg);
     const poll = window.setInterval(() => {
       if (!popup.closed) return;
+      // Only reject if we haven't already received the postMessage
+      if (received) return;
       cleanup();
       reject(new Error("The GitHub window was closed before finishing."));
     }, 500);
@@ -102,15 +106,20 @@ function Settings() {
   }
 
   async function connect() {
-    const popup = window.open("", "ct-github-oauth", "width=600,height=720");
-    if (!popup) return toast.error("Popup blocked. Allow popups and try again.");
     await run("connect", async () => {
+      // Get the authorization URL first, before opening the popup,
+      // so the user never sees a blank window.
+      const { authorizationUrl } = await startFn();
+
+      const popup = window.open(authorizationUrl, "ct-github-oauth", "width=600,height=720");
+      if (!popup) {
+        toast.error("Popup blocked. Allow popups and try again.");
+        return;
+      }
+
       let code: string | null;
       try {
-        const { authorizationUrl } = await startFn();
-        const done = waitForOAuth(popup);
-        popup.location.href = authorizationUrl;
-        code = await done;
+        code = await waitForOAuth(popup);
       } catch (e) {
         popup.close();
         throw e;
