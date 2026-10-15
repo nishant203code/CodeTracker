@@ -16,7 +16,7 @@ dist-ssr
 .nitro
 *.local
 
-# Environment — ONLY .env.example is tracked
+# Environment
 .env
 .env.*
 !.env.example
