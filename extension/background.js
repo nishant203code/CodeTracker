@@ -1,8 +1,9 @@
-const DEFAULT_BASE = "http://localhost:3000";
+const DEFAULT_BASE = "https://code-tracker-bh1n.vercel.app";
 
 async function cfg() {
   const { apiBase, token } = await chrome.storage.local.get(["apiBase", "token"]);
-  return { base: (apiBase || DEFAULT_BASE).replace(/\/+$/, ""), token: token || "" };
+  const base = (apiBase && apiBase !== "http://localhost:3000" ? apiBase : DEFAULT_BASE).replace(/\/+$/, "");
+  return { base, token: token || "" };
 }
 
 async function call(method, body) {

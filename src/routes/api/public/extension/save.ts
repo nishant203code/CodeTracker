@@ -37,13 +37,13 @@ async function sha256Hex(s: string) {
 }
 
 async function authUser(request: Request) {
-  const m = (request.headers.get("authorization") ?? "").match(/^Bearer\s+(ct_[a-f0-9]{48})$/);
+  const m = (request.headers.get("authorization") ?? "").trim().match(/^Bearer\s+(ct_[a-f0-9]{48})$/i);
   if (!m) return null;
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data } = await supabaseAdmin
     .from("extension_tokens")
     .select("user_id")
-    .eq("token_hash", await sha256Hex(m[1]))
+    .eq("token_hash", await sha256Hex(m[1].toLowerCase()))
     .maybeSingle();
   if (!data) return null;
   await supabaseAdmin
@@ -97,36 +97,53 @@ export const Route = createFileRoute("/api/public/extension/save")({
         const link = `https://leetcode.com/problems/${body.slug}/`;
         const topics = normalizeTopics(body.topics.map(formatTopic));
 
-        // ---- dedup save (same rule as the app: platform + problem_id, else name)
+        // ---- dedup save (platform + problem_id, slug in link, or normalized name)
         type Row = {
           id: string;
           name: string;
           times_solved: number;
           date_first_solved: string;
           last_solved_date: string | null;
+          problem_id?: string | null;
+          link?: string | null;
         };
         let existing: Row | null = null;
-        if (body.problem_id) {
+        const pid = body.problem_id?.trim();
+        if (pid) {
           const { data } = await admin
             .from("problems")
-            .select("id,name,times_solved,date_first_solved,last_solved_date")
+            .select("id,name,times_solved,date_first_solved,last_solved_date,problem_id,link")
             .eq("user_id", userId)
             .eq("platform", "leetcode")
-            .eq("problem_id", body.problem_id)
+            .eq("problem_id", pid)
             .maybeSingle();
           existing = (data as Row) ?? null;
         }
-        if (!existing) {
-          const norm = body.title.trim().toLowerCase().replace(/\s+/g, " ");
+        if (!existing && body.slug) {
           const { data } = await admin
             .from("problems")
-            .select("id,name,times_solved,date_first_solved,last_solved_date")
+            .select("id,name,times_solved,date_first_solved,last_solved_date,problem_id,link")
+            .eq("user_id", userId)
+            .eq("platform", "leetcode")
+            .ilike("link", `%problems/${body.slug}%`);
+          if (data && data.length > 0) {
+            existing = data[0] as Row;
+          }
+        }
+        if (!existing) {
+          const norm = body.title.trim().toLowerCase().replace(/\s+/g, " ");
+          const normClean = norm.replace(/^\d+[\.\s\-]+/, "");
+          const { data } = await admin
+            .from("problems")
+            .select("id,name,times_solved,date_first_solved,last_solved_date,problem_id,link")
             .eq("user_id", userId)
             .eq("platform", "leetcode");
           existing =
-            ((data ?? []) as Row[]).find(
-              (r) => r.name.trim().toLowerCase().replace(/\s+/g, " ") === norm,
-            ) ?? null;
+            ((data ?? []) as Row[]).find((r) => {
+              const rNorm = r.name.trim().toLowerCase().replace(/\s+/g, " ");
+              const rNormClean = rNorm.replace(/^\d+[\.\s\-]+/, "");
+              return rNorm === norm || rNormClean === normClean;
+            }) ?? null;
         }
 
         let problemRowId: string;
@@ -145,6 +162,7 @@ export const Route = createFileRoute("/api/public/extension/save")({
               date_first_solved: firstD,
               last_solved_date: lastD,
               last_revised_at: new Date().toISOString(),
+              ...(pid && !existing.problem_id ? { problem_id: pid } : {}),
               ...(body.notes.trim() ? { notes: body.notes } : {}),
               ...(body.hints.trim() ? { hints: body.hints } : {}),
               ...(body.time_taken_minutes != null

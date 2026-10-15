@@ -21,14 +21,24 @@
     return (await r.json()).data;
   }
 
+  let lastAcceptedAt = 0;
+  let lastAcceptedSlug = "";
+
   async function onAccepted(id, check, force) {
-    if (handled.has(id) && !force) return;
-    handled.add(id);
+    const now = Date.now();
+    const sub = submits.get(String(id)) || {};
+    const slug = sub.slug || (location.pathname.match(/\/problems\/([a-z0-9-]+)/) || [])[1] || "";
+    if (!force) {
+      if (handled.has(String(id))) return;
+      if (lastAcceptedSlug && lastAcceptedSlug === slug && now - lastAcceptedAt < 10000) return;
+    }
+    handled.add(String(id));
+    lastAcceptedAt = now;
+    lastAcceptedSlug = slug;
     try {
-      const sub = submits.get(id) || {};
       let code = sub.code,
         lang = sub.lang || check.lang;
-      let slug = sub.slug || (location.pathname.match(/\/problems\/([a-z0-9-]+)/) || [])[1];
+      let targetSlug = slug;
       if (!code) {
         const d = await gql(
           `query s($id: Int!) { submissionDetails(submissionId: $id) { code lang { name } question { titleSlug } } }`,
@@ -36,12 +46,12 @@
         );
         code = d?.submissionDetails?.code || "";
         lang = lang || d?.submissionDetails?.lang?.name;
-        slug = slug || d?.submissionDetails?.question?.titleSlug;
+        targetSlug = targetSlug || d?.submissionDetails?.question?.titleSlug;
       }
       const q = (
         await gql(
           `query q($s: String!) { question(titleSlug: $s) { questionFrontendId title titleSlug difficulty topicTags { name } } }`,
-          { s: slug },
+          { s: targetSlug },
         )
       )?.question;
       if (!q) throw new Error("Couldn't read problem details from LeetCode");
@@ -123,7 +133,9 @@
     if (!txt || txt === lastBanner) return;
     lastBanner = txt;
     report(txt);
-    if (/^Accepted/.test(txt)) saveLatest(false);
+    if (/^Accepted/.test(txt) && Date.now() - lastAcceptedAt > 10000) {
+      saveLatest(false);
+    }
   }).observe(document, { childList: true, subtree: true, characterData: true });
 
   function inspect(url, reqBody, respText) {

@@ -25,6 +25,7 @@ export const getIntegrationStatus = createServerFn({ method: "GET" })
       githubLogin: gs?.github_login ?? null,
       repoOwner: gs?.repo_owner ?? null,
       repoName: gs?.repo_name ?? null,
+      extensionConnected: !!tok?.last_used_at,
       token: tok ?? null,
     };
   });

@@ -5,6 +5,12 @@
   let t = null; // { ms, startedAt, stopped }
   let lastResult = null; // { status, runtime, at }
 
+  const IDLE_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes inactivity timeout
+  let lastActiveAt = Date.now();
+  let isIdle = false;
+  let activeAcceptedSlug = null;
+  let isSaving = false;
+
   // After the extension is reloaded/updated, this old script's context is dead;
   // touching chrome.* then throws "Extension context invalidated". Bail out quietly.
   const alive = () => {
@@ -18,26 +24,55 @@
   const save = () => {
     if (!alive() || !slug || !t) return;
     try {
-      chrome.storage.local.set({ [key(slug)]: t });
+      const data = {
+        ms: elapsed(),
+        startedAt: t.startedAt ? Date.now() : null,
+        stopped: !!t.stopped,
+      };
+      t.ms = data.ms;
+      if (t.startedAt) t.startedAt = Date.now();
+      chrome.storage.local.set({ [key(slug)]: data });
     } catch {}
   };
-  const elapsed = () => (t ? t.ms + (t.startedAt ? Date.now() - t.startedAt : 0) : 0);
-  const pause = () => {
+  const elapsed = () => {
+    if (!t) return 0;
+    if (!t.startedAt) return t.ms;
+    const now = Date.now();
+    const timeSinceActive = now - lastActiveAt;
+    const activeSpan = timeSinceActive > IDLE_TIMEOUT_MS
+      ? Math.max(0, lastActiveAt - t.startedAt + IDLE_TIMEOUT_MS)
+      : now - t.startedAt;
+    return t.ms + Math.max(0, activeSpan);
+  };
+  const pause = (dueToInactivity = false) => {
     if (t?.startedAt) {
-      t.ms = elapsed();
+      if (dueToInactivity) {
+        const effectiveEnd = Math.min(Date.now(), lastActiveAt + IDLE_TIMEOUT_MS);
+        t.ms += Math.max(0, effectiveEnd - t.startedAt);
+      } else {
+        t.ms = elapsed();
+      }
       t.startedAt = null;
       save();
     }
   };
   const resume = () => {
-    if (t && !t.stopped && !t.startedAt && document.visibilityState === "visible") {
+    if (
+      t &&
+      !t.stopped &&
+      !t.startedAt &&
+      document.visibilityState === "visible" &&
+      document.hasFocus() &&
+      !isIdle
+    ) {
       t.startedAt = Date.now();
+      lastActiveAt = Date.now();
       save();
     }
   };
 
   async function load(s) {
-    pause();
+    pause(false);
     slug = s;
     if (!s) {
       t = null;
@@ -45,19 +80,70 @@
     }
     if (!alive()) return;
     const got = (await chrome.storage.local.get(key(s)))[key(s)];
-    t = got ? { ...got, startedAt: null } : { ms: 0, startedAt: null, stopped: false };
+    t = got
+      ? { ms: got.ms || 0, startedAt: null, stopped: !!got.stopped }
+      : { ms: 0, startedAt: null, stopped: false };
+    lastActiveAt = Date.now();
+    isIdle = false;
     resume();
   }
 
-  document.addEventListener("visibilitychange", () =>
-    document.visibilityState === "visible" ? resume() : pause(),
-  );
-  window.addEventListener("beforeunload", pause);
+  const onActivity = () => {
+    lastActiveAt = Date.now();
+    if (isIdle) {
+      isIdle = false;
+      resume();
+    }
+  };
+  ["mousemove", "keydown", "mousedown", "touchstart", "scroll"].forEach((evt) => {
+    window.addEventListener(evt, onActivity, { passive: true });
+  });
+
+  window.addEventListener("blur", () => pause(false));
+  window.addEventListener("focus", () => {
+    lastActiveAt = Date.now();
+    isIdle = false;
+    resume();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      lastActiveAt = Date.now();
+      isIdle = false;
+      resume();
+    } else {
+      pause(false);
+    }
+  });
+  window.addEventListener("beforeunload", () => pause(false));
+
   setInterval(() => {
     const s = slugNow();
-    if (s !== slug) load(s);
-    else if (t?.startedAt) save();
-  }, 2000);
+    if (s !== slug) {
+      load(s);
+    } else {
+      if (t?.startedAt) {
+        if (
+          document.visibilityState !== "visible" ||
+          !document.hasFocus() ||
+          Date.now() - lastActiveAt > IDLE_TIMEOUT_MS
+        ) {
+          isIdle = Date.now() - lastActiveAt > IDLE_TIMEOUT_MS;
+          pause(isIdle);
+        } else {
+          save();
+        }
+      } else if (
+        !isIdle &&
+        t &&
+        !t.stopped &&
+        document.visibilityState === "visible" &&
+        document.hasFocus() &&
+        Date.now() - lastActiveAt <= IDLE_TIMEOUT_MS
+      ) {
+        resume();
+      }
+    }
+  }, 1000);
   load(slugNow());
 
   chrome.runtime.onMessage.addListener((msg, _s, reply) => {
@@ -74,6 +160,8 @@
       reply({ ok: true });
     } else if (msg?.type === "ct-timer-reset" && slug) {
       t = { ms: 0, startedAt: null, stopped: false };
+      lastActiveAt = Date.now();
+      isIdle = false;
       resume();
       save();
       reply({ ok: true });
@@ -112,6 +200,7 @@
   const close = () => {
     host.remove();
     mounted = false;
+    activeAcceptedSlug = null;
   };
   const esc = (s) =>
     String(s).replace(
@@ -132,8 +221,10 @@
   }
 
   function showAccepted(d) {
+    if (isSaving || (mounted && activeAcceptedSlug === d.slug)) return;
+    activeAcceptedSlug = d.slug;
     if (t) {
-      pause();
+      pause(false);
       t.stopped = true;
       save();
     }
@@ -152,6 +243,8 @@
       <div class="msg" id="r"></div>`;
     root.getElementById("x").onclick = close;
     root.getElementById("s").onclick = async () => {
+      if (isSaving) return;
+      isSaving = true;
       const btn = root.getElementById("s"),
         r = root.getElementById("r");
       btn.disabled = true;
@@ -171,12 +264,14 @@
         .sendMessage({ type: "ct-save", payload })
         .catch(() => ({ error: "Extension was reloaded — refresh this page." }));
       if (res?.error) {
+        isSaving = false;
         r.className = "msg err";
         r.textContent = res.error;
         btn.disabled = false;
         btn.textContent = "Try again";
         return;
       }
+      isSaving = false;
       let html = `<div class="ok">${res.kind === "created" ? "Saved to CodeTracker." : `Already tracked — solved ${res.times_solved}×.`}</div>`;
       if (res.github_url)
         html += `<div class="ok">Pushed to GitHub · <a href="${esc(res.github_url)}" target="_blank" rel="noopener">view</a></div>`;

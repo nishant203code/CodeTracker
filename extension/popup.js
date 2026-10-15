@@ -1,4 +1,4 @@
-const DEFAULT_BASE = "http://localhost:3000";
+const DEFAULT_BASE = "https://code-tracker-bh1n.vercel.app";
 const $ = (id) => document.getElementById(id);
 const show = (live) => {
   $("setup").style.display = live ? "none" : "block";
@@ -50,8 +50,9 @@ async function poll(tabId) {
     "apiBase",
     "connected",
   ]);
+  const currentBase = (apiBase && apiBase !== "http://localhost:3000" ? apiBase : DEFAULT_BASE);
   $("token").value = token || "";
-  $("base").value = apiBase || DEFAULT_BASE;
+  $("base").value = currentBase;
   show(!!(token && connected));
   if (token) test().then((ok) => ok && show(true));
 
@@ -76,9 +77,11 @@ async function poll(tabId) {
 
 $("change").onclick = () => show(false);
 $("save").onclick = async () => {
+  const enteredBase = $("base").value.trim();
+  const effectiveBase = (enteredBase && enteredBase !== "http://localhost:3000" ? enteredBase : DEFAULT_BASE).replace(/\/+$/, "");
   await chrome.storage.local.set({
     token: $("token").value.trim(),
-    apiBase: ($("base").value.trim() || DEFAULT_BASE).replace(/\/+$/, ""),
+    apiBase: effectiveBase,
   });
   if (await test()) show(true);
 };

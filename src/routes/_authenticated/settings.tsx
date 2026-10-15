@@ -7,6 +7,7 @@ import { Github, Puzzle, Download, KeyRound, Copy, Check } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   getIntegrationStatus,
   startGithubConnect,
@@ -81,7 +82,15 @@ function Settings() {
   const revokeFn = useServerFn(revokeExtensionToken);
 
   const { data: s, isLoading } = useQuery(
-    queryOptions({ queryKey: ["integrations"], queryFn: () => statusFn() }),
+    queryOptions({
+      queryKey: ["integrations"],
+      queryFn: () => statusFn(),
+      refetchInterval: (query) => {
+        const data = query.state.data;
+        if (data?.token && !data.token.last_used_at) return 3000;
+        return false;
+      },
+    }),
   );
   const [repo, setRepo] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -243,9 +252,32 @@ function Settings() {
       </Card>
 
       <Card className="space-y-4 p-5">
-        <div className="flex items-center gap-2">
-          <Puzzle className="h-5 w-5 text-primary" />
-          <h2 className="font-semibold">LeetCode Chrome extension</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Puzzle className="h-5 w-5 text-primary" />
+            <h2 className="font-semibold">LeetCode Chrome extension</h2>
+          </div>
+          {isLoading ? (
+            <Badge variant="outline" className="text-muted-foreground text-xs">
+              Loading…
+            </Badge>
+          ) : s?.token ? (
+            s.token.last_used_at ? (
+              <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 font-medium text-xs">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-1.5" />
+                Connected
+              </Badge>
+            ) : (
+              <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/20 font-medium text-xs">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 mr-1.5" />
+                Key generated · not connected yet
+              </Badge>
+            )
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground text-xs">
+              Not configured
+            </Badge>
+          )}
         </div>
         <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
           <li>Download the extension and unzip it.</li>
@@ -263,14 +295,21 @@ function Settings() {
           <Download className="mr-2 h-4 w-4" /> Download extension
         </Button>
 
-        <div className="space-y-2 border-t border-border/60 pt-4">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <KeyRound className="h-4 w-4" /> Extension key
+        <div className="space-y-3 border-t border-border/60 pt-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <KeyRound className="h-4 w-4" /> Extension key
+            </div>
+            {s?.token && (
+              <span className="text-xs text-muted-foreground font-mono">
+                Key ending in …{s.token.token_hint}
+              </span>
+            )}
           </div>
           {newToken ? (
-            <div className="space-y-2">
+            <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
               <p className="text-xs text-muted-foreground">
-                Copy it now — it won't be shown again.
+                Copy it now and paste it into the extension popup — it won't be shown again in full.
               </p>
               <div className="flex gap-2">
                 <Input readOnly value={newToken} className="font-mono text-xs" />
@@ -287,18 +326,35 @@ function Settings() {
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground pt-1">
+                {s?.token?.last_used_at
+                  ? `✓ Connected · last validated ${new Date(s.token.last_used_at).toLocaleTimeString()}`
+                  : "Waiting for extension to connect and validate this key…"}
+              </p>
             </div>
           ) : s?.token ? (
-            <p className="text-sm text-muted-foreground">
-              Active key ending in <span className="font-mono">…{s.token.token_hint}</span>
-              {s.token.last_used_at
-                ? ` · last used ${new Date(s.token.last_used_at).toLocaleString()}`
-                : " · not used yet"}
-            </p>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">
+                Active key ending in <span className="font-mono font-medium text-foreground">…{s.token.token_hint}</span>
+                {s.token.last_used_at ? (
+                  <>
+                    {" · "}
+                    <span className="text-emerald-400 font-medium">Connected</span>
+                    {` (last used ${new Date(s.token.last_used_at).toLocaleString()})`}
+                  </>
+                ) : (
+                  <>
+                    {" · "}
+                    <span className="text-amber-400 font-medium">Pending connection</span>
+                    {" (enter key in extension and click Save & test connection)"}
+                  </>
+                )}
+              </p>
+            </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No key yet.</p>
+            <p className="text-sm text-muted-foreground">No key generated yet.</p>
           )}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 pt-1">
             <Button
               size="sm"
               disabled={busy !== null}
